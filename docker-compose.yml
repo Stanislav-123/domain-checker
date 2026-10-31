@@ -5,22 +5,41 @@ services:
     build: .
     container_name: domain-checker
     restart: unless-stopped
+    user: "1000:1000"
     environment:
+      # Tracker Configuration
       - TRACKER_TYPE=${TRACKER_TYPE}
       - TRACKER_URL=${TRACKER_URL}
       - TRACKER_API_KEY=${TRACKER_API_KEY}
       - CUSTOM_HEADER_NAME=${CUSTOM_HEADER_NAME:-Authorization}
       - CUSTOM_DOMAINS_PATH=${CUSTOM_DOMAINS_PATH:-domains}
+      
+      # Telegram Configuration
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_API_URL=${TELEGRAM_API_URL:-}
+      
+      # Check Configuration
       - CHECK_INTERVAL_MINUTES=${CHECK_INTERVAL_MINUTES:-15}
       - CONSECUTIVE_FAILURES_THRESHOLD=${CONSECUTIVE_FAILURES_THRESHOLD:-2}
       - SSL_WARNING_DAYS=${SSL_WARNING_DAYS:-7}
       - MAX_CONCURRENT_CHECKS=${MAX_CONCURRENT_CHECKS:-10}
       - REQUEST_TIMEOUT_SECONDS=${REQUEST_TIMEOUT_SECONDS:-10}
-      - DATABASE_PATH=${DATABASE_PATH:-data/domain_checker.db}
+      
+      # Storage & Logging
+      - DATABASE_PATH=/app/data/domain_checker.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE=/app/logs/domain_checker.log
+      - LOG_ROTATION_ENABLED=${LOG_ROTATION_ENABLED:-true}
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys, sqlite3; conn = sqlite3.connect('/app/data/domain_checker.db'); conn.execute('SELECT 1'); conn.close(); sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
     networks:
       - domain-checker-network
 

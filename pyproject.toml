@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "domain-checker"
-version = "1.0.0"
+version = "1.1.0"
 description = "Domain monitoring service for traffic arbitrage"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,8 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "cryptography>=42.0.0",
     "aiosqlite>=0.19.0",
+    "structlog>=24.1.0",
+    "tenacity>=8.2.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +30,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "respx>=0.20.2",
+    "ruff>=0.3.0",
 ]
 
 [project.scripts]
