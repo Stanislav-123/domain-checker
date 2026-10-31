@@ -53,6 +53,6 @@ class KeitaroSource(DomainSource):
     
     def _clean_domain(self, domain: str) -> str:
         """Clean domain name (remove protocol, trailing slash)."""
-        domain = domain.replace('https://', '').replace('http://', '')
-        domain = domain.split('/')[0]
-        return domain.strip()
+        domain = domain.strip().replace('https://', '').replace('http://', '')
+        domain = domain.split('/')[0].split('?')[0]
+        return domain.strip().lower().rstrip('.')

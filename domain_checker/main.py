@@ -67,21 +67,24 @@ async def run_app():
         scheduler.notifier
     )
     
-    scheduler.start()
-    
     print("✅ Service started")
     print("   Press Ctrl+C to stop\n")
-    
+
     await scheduler.check_all_domains()
+    scheduler.start()
     
     stop_event = asyncio.Event()
     
-    def signal_handler(sig, frame):
+    def signal_handler():
         print("\n\n🛑 Stopping service...")
         stop_event.set()
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, signal_handler)
+        except NotImplementedError:  # Windows
+            signal.signal(sig, lambda *_: stop_event.set())
     
     bot_task = asyncio.create_task(bot.start_polling())
     

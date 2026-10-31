@@ -46,7 +46,10 @@ class CustomSource(DomainSource):
         4. Plain text: one domain per line
         """
         headers = {
-            self.header_name: f"Bearer {self.api_key}" if self.header_name == "Authorization" else self.api_key,
+            self.header_name: (f"Bearer {self.api_key}"
+                               if self.header_name.lower() == "authorization"
+                               and not self.api_key.lower().startswith(("bearer ", "basic ", "token "))
+                               else self.api_key),
             "Accept": "application/json"
         }
         
@@ -56,8 +59,13 @@ class CustomSource(DomainSource):
             
             content_type = response.headers.get('content-type', '')
             
-            if 'application/json' in content_type:
-                domains = self._parse_json(response.json())
+            try:
+                data = response.json()
+                is_json = isinstance(data, (list, dict))
+            except ValueError:
+                is_json = False
+            if is_json:
+                domains = self._parse_json(data)
             else:
                 domains = self._parse_text(response.text)
             
@@ -99,11 +107,11 @@ class CustomSource(DomainSource):
     
     def _parse_text(self, text: str) -> List[str]:
         """Parse plain text response (one domain per line)."""
-        lines = text.strip().split('\n')
-        return [line.strip() for line in lines if line.strip()]
+        lines = text.replace(',', '\n').split('\n')
+        return [line.strip() for line in lines if line.strip() and not line.strip().startswith('#')]
     
     def _clean_domain(self, domain: str) -> str:
         """Clean domain name (remove protocol, trailing slash)."""
-        domain = domain.replace('https://', '').replace('http://', '')
-        domain = domain.split('/')[0]
-        return domain.strip()
+        domain = domain.strip().replace('https://', '').replace('http://', '')
+        domain = domain.split('/')[0].split('?')[0]
+        return domain.strip().lower().rstrip('.')

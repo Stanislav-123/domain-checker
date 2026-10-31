@@ -34,6 +34,8 @@ class DomainCheckScheduler:
             max_concurrent=config.max_concurrent_checks
         )
         self.storage = Storage(config.database_path)
+        self._source_failed = False
+        self._ssl_warned_on = {}  # domain -> date of last SSL-expiry warning
         self.notifier = Notifier(
             config.telegram_bot_token,
             config.telegram_chat_id,
@@ -76,7 +78,19 @@ class DomainCheckScheduler:
         print(f"\n[{datetime.now(timezone.utc).isoformat()}] Starting domain check cycle...")
         
         try:
-            domains = await self.source.fetch_domains()
+            try:
+                domains = await self.source.fetch_domains()
+            except Exception as e:
+                print(f"Failed to fetch domains from tracker: {e}")
+                if not self._source_failed:
+                    self._source_failed = True
+                    await self.notifier.notify_source_error(self.config.tracker_type, str(e))
+                return
+            if self._source_failed:
+                self._source_failed = False
+                await self.notifier.notify_source_recovered(self.config.tracker_type)
+            # de-duplicate, keep order, normalise case
+            domains = list(dict.fromkeys(d.lower() for d in domains if d))
             print(f"Fetched {len(domains)} domains from tracker")
             
             if not domains:
@@ -124,23 +138,28 @@ class DomainCheckScheduler:
             await self.storage.update_domain_state(domain, new_state)
         
         elif status == 'up':
-            was_down = prev_state and prev_state.get('consecutive_failures', 0) > 0
-            
+            was_down = bool(prev_state) and prev_state.get('consecutive_failures', 0) > 0
+            # Only announce recovery for an outage we actually alerted about.
+            alerted = bool(prev_state) and prev_state.get('consecutive_failures', 0) >= self.config.consecutive_failures_threshold
+
             new_state = {
                 'last_status': status,
                 'consecutive_failures': 0,
-                'last_alert_sent': prev_state.get('last_alert_sent') if prev_state else None,
-                'last_recovery_sent': None
+                # outage is over: clear alert marker so next blip is judged fresh
+                'last_alert_sent': None,
+                'last_recovery_sent': prev_state.get('last_recovery_sent') if prev_state else None
             }
-            
-            if was_down and prev_state.get('last_alert_sent'):
+
+            if was_down and alerted:
                 await self.notifier.notify_domain_recovered(domain, result)
                 new_state['last_recovery_sent'] = datetime.now(timezone.utc).isoformat()
             
             ssl_days = result.get('ssl_days_remaining')
             if ssl_days is not None and result.get('ssl_valid'):
-                if ssl_days <= self.config.ssl_warning_days:
+                today = datetime.now(timezone.utc).date()
+                if ssl_days <= self.config.ssl_warning_days and self._ssl_warned_on.get(domain) != today:
                     await self.notifier.notify_ssl_expiring(domain, ssl_days)
+                    self._ssl_warned_on[domain] = today
             
             await self.storage.update_domain_state(domain, new_state)
         
@@ -154,7 +173,9 @@ class DomainCheckScheduler:
             self.check_all_domains,
             trigger=trigger,
             id='domain_check',
-            replace_existing=True
+            replace_existing=True,
+            max_instances=1,   # never overlap a slow cycle with the next one
+            coalesce=True
         )
         
         self.scheduler.start()
