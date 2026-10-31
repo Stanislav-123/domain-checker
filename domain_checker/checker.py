@@ -10,6 +10,11 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 
+# Codes that mean "the server is alive but refuses us" (auth walls, anti-bot,
+# rate limits). Treating them as DOWN produces false alarms.
+REACHABLE_CODES = {401, 403, 429}
+
+
 class DomainChecker:
     """Performs health checks on domains."""
     
@@ -71,10 +76,18 @@ class DomainChecker:
                 ssl_result = await self._check_ssl(domain)
                 result.update(ssl_result)
                 
-                if result['http_code'] and 200 <= result['http_code'] < 400:
+                code = result['http_code']
+                if code and (200 <= code < 400 or code in REACHABLE_CODES):
                     result['status'] = 'up'
                 else:
                     result['status'] = 'down'
+                    if code and not result.get('error_message'):
+                        result['error_message'] = f'HTTP {code}'
+
+                # A reachable site with a broken/expired certificate is broken for users.
+                if result['status'] == 'up' and result.get('ssl_valid') is False:
+                    result['status'] = 'down'
+                    result['error_message'] = result.get('ssl_error') or 'SSL certificate invalid'
                 
             except Exception as e:
                 result['status'] = 'down'
@@ -92,7 +105,7 @@ class DomainChecker:
             True if DNS resolves successfully
         """
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.getaddrinfo(domain, None)
             return True
         except (socket.gaierror, OSError):
@@ -153,11 +166,33 @@ class DomainChecker:
         """
         result = {
             'ssl_valid': None,
-            'ssl_days_remaining': None
+            'ssl_days_remaining': None,
+            'ssl_error': None
         }
-        
+
+        # 1) Verified handshake: catches expired, self-signed, wrong-host certs.
         try:
-            loop = asyncio.get_event_loop()
+            vctx = ssl.create_default_context()
+            _, vwriter = await asyncio.wait_for(
+                asyncio.open_connection(domain, 443, ssl=vctx, server_hostname=domain),
+                timeout=self.timeout
+            )
+            vwriter.close()
+            try:
+                await vwriter.wait_closed()
+            except Exception:
+                pass
+            verify_error = None
+        except ssl.SSLCertVerificationError as e:
+            verify_error = f'SSL: {e.verify_message or e.reason}'
+        except Exception:
+            verify_error = 'no-https'
+
+        if verify_error == 'no-https':
+            return result  # no HTTPS on this domain; nothing to judge
+
+        # 2) Unverified handshake just to read the expiry date.
+        try:
             
             context = ssl.create_default_context()
             context.check_hostname = False
@@ -186,12 +221,15 @@ class DomainChecker:
             
             writer.close()
             await writer.wait_closed()
-            
+
         except asyncio.TimeoutError:
             pass
         except Exception:
             pass
         
+        if verify_error:
+            result['ssl_valid'] = False
+            result['ssl_error'] = verify_error
         return result
     
     async def check_multiple_domains(self, domains: List[str]) -> List[Dict]:

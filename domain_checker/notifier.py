@@ -1,9 +1,22 @@
 """Telegram notification manager."""
 
 import asyncio
+import html
 from typing import Dict, List
 from aiogram import Bot
 from aiogram.enums import ParseMode
+
+
+def make_bot(token: str):
+    """Create aiogram Bot; honours TELEGRAM_API_URL (self-hosted Bot API server)."""
+    import os
+    from aiogram import Bot
+    api_url = os.getenv("TELEGRAM_API_URL")
+    if api_url:
+        from aiogram.client.session.aiohttp import AiohttpSession
+        from aiogram.client.telegram import TelegramAPIServer
+        return Bot(token=token, session=AiohttpSession(api=TelegramAPIServer.from_base(api_url)))
+    return Bot(token=token)
 
 
 class Notifier:
@@ -24,7 +37,7 @@ class Notifier:
             consecutive_failures_threshold: Number of consecutive failures before alerting
             ssl_warning_days: Days before SSL expiry to warn
         """
-        self.bot = Bot(token=bot_token)
+        self.bot = make_bot(bot_token)
         self.chat_id = chat_id
         self.consecutive_failures_threshold = consecutive_failures_threshold
         self.ssl_warning_days = ssl_warning_days
@@ -71,7 +84,7 @@ class Notifier:
         if not result.get('dns_resolved'):
             message += f"🔍 DNS: не разрешается\n"
         
-        message += f"💬 Ошибка: <code>{error_msg}</code>"
+        message += f"💬 Ошибка: <code>{html.escape(str(error_msg))}</code>"
         
         await self._send_message(message)
     
@@ -141,6 +154,18 @@ class Notifier:
         
         return message
     
+    async def notify_source_error(self, tracker: str, error: str):
+        """Tell the user the domain list could not be fetched."""
+        await self._send_message(
+            f"⚠️ <b>Не удалось получить домены из трекера</b>\n\n"
+            f"📡 Трекер: <code>{tracker}</code>\n"
+            f"💬 Ошибка: <code>{html.escape(error[:500])}</code>"
+        )
+
+    async def notify_source_recovered(self, tracker: str):
+        """Tell the user the tracker API works again."""
+        await self._send_message(f"✅ <b>Трекер снова отвечает</b>: <code>{tracker}</code>")
+
     async def _send_message(self, text: str):
         """Send message to Telegram.
         

@@ -28,6 +28,7 @@ class SetupWizard:
         print("=" * 60 + "\n")
         
         self._setup_tracker()
+        self._test_tracker()
         self._setup_telegram()
         self._setup_checker()
         self._setup_database()
@@ -100,6 +101,29 @@ class SetupWizard:
         
         print()
     
+    def _test_tracker(self):
+        """Try fetching domains right away so typos in URL/key surface now."""
+        import asyncio
+        from .sources import KeitaroSource, BinomSource, CustomSource
+        t = self.config['tracker']
+        try:
+            if t['type'] == 'keitaro':
+                src = KeitaroSource(t['url'], t['api_key'])
+            elif t['type'] == 'binom':
+                src = BinomSource(t['url'], t['api_key'])
+            else:
+                c = t.get('custom', {})
+                src = CustomSource(t['url'], t['api_key'], c.get('header_name', 'Authorization'),
+                                   c.get('domains_path', 'domains'))
+            domains = asyncio.run(src.fetch_domains())
+            print(f"✅ Трекер отвечает, получено доменов: {len(domains)}")
+            for d in domains[:5]:
+                print(f"   • {d}")
+        except Exception as e:
+            print(f"⚠️  Не удалось получить домены: {e}")
+            print("   Проверьте URL и API ключ (настройку можно продолжить и поправить config.yaml позже).")
+        print()
+
     def _setup_telegram(self):
         """Setup Telegram configuration."""
         print("💬 НАСТРОЙКА TELEGRAM\n")
@@ -115,7 +139,7 @@ class SetupWizard:
         print("  1. Напишите @userinfobot в Telegram")
         print("  2. Скопируйте ваш Chat ID\n")
         
-        chat_id = self._input_text("Telegram Chat ID: ")
+        chat_id = self._input_int("Telegram Chat ID: ", allow_negative=True)
         
         self.config['telegram']['bot_token'] = bot_token
         self.config['telegram']['chat_id'] = int(chat_id)
@@ -164,35 +188,35 @@ class SetupWizard:
         }
         
         if choice == '7':
-            interval = int(self._input_text("Интервал в минутах: "))
+            interval = self._input_int("Интервал в минутах: ", minimum=1)
         else:
             interval = intervals[choice]
         
         self.config['checker']['interval_minutes'] = interval
         
-        threshold = self._input_text(
+        threshold = self._input_int(
             "\nКоличество неудачных попыток перед алертом (по умолчанию: 2): ",
-            default="2"
+            default=2, minimum=1
         )
-        self.config['checker']['consecutive_failures_threshold'] = int(threshold)
+        self.config['checker']['consecutive_failures_threshold'] = threshold
         
-        ssl_days = self._input_text(
+        ssl_days = self._input_int(
             "Предупреждать об истечении SSL за N дней (по умолчанию: 7): ",
-            default="7"
+            default=7, minimum=0
         )
-        self.config['checker']['ssl_warning_days'] = int(ssl_days)
+        self.config['checker']['ssl_warning_days'] = ssl_days
         
-        concurrent = self._input_text(
+        concurrent = self._input_int(
             "Максимум одновременных проверок (по умолчанию: 10): ",
-            default="10"
+            default=10, minimum=1
         )
-        self.config['checker']['max_concurrent_checks'] = int(concurrent)
+        self.config['checker']['max_concurrent_checks'] = concurrent
         
-        timeout = self._input_text(
+        timeout = self._input_int(
             "Таймаут запроса в секундах (по умолчанию: 10): ",
-            default="10"
+            default=10, minimum=1
         )
-        self.config['checker']['request_timeout_seconds'] = int(timeout)
+        self.config['checker']['request_timeout_seconds'] = timeout
         
         print()
     
@@ -220,7 +244,7 @@ class SetupWizard:
             User input string
         """
         while True:
-            if hide:
+            if hide and sys.stdin.isatty():
                 import getpass
                 value = getpass.getpass(prompt)
             else:
@@ -233,6 +257,22 @@ class SetupWizard:
             else:
                 print("❌ Это поле обязательно для заполнения.")
     
+    def _input_int(self, prompt: str, default=None, minimum=None, allow_negative=False) -> int:
+        """Ask for an integer and re-ask on bad input instead of crashing."""
+        while True:
+            raw = input(prompt).strip()
+            if not raw and default is not None:
+                return int(default)
+            try:
+                value = int(raw)
+            except ValueError:
+                print("❌ Введите целое число.")
+                continue
+            if minimum is not None and value < minimum and not (allow_negative and value < 0):
+                print(f"❌ Значение должно быть не меньше {minimum}.")
+                continue
+            return value
+
     def _input_choice(self, prompt: str, valid_choices: list) -> str:
         """Get choice input from user.
         

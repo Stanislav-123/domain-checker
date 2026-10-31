@@ -6,7 +6,7 @@ from aiogram.types import Message
 from typing import Optional
 from .checker import DomainChecker
 from .storage import Storage
-from .notifier import Notifier
+from .notifier import Notifier, make_bot
 
 
 class DomainBot:
@@ -29,7 +29,7 @@ class DomainBot:
             storage: Storage instance
             notifier: Notifier instance
         """
-        self.bot = Bot(token=bot_token)
+        self.bot = make_bot(bot_token)
         self.dp = Dispatcher()
         self.allowed_chat_id = allowed_chat_id
         self.checker = checker
@@ -213,7 +213,7 @@ class DomainBot:
     
     async def start_polling(self):
         """Start bot polling."""
-        await self.dp.start_polling(self.bot)
+        await self.dp.start_polling(self.bot, handle_signals=False)
     
     async def stop(self):
         """Stop bot."""

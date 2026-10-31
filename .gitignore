@@ -37,3 +37,7 @@ data/
 *.swo
 *~
 .DS_Store
+
+.venv/
+venv/
+data/
