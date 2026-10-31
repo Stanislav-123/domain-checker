@@ -250,7 +250,11 @@ class DomainBot:
 
     async def start_polling(self):
         """Start bot polling."""
-        await self.dp.start_polling(self.bot, handle_signals=False)
+        # handle_as_tasks=False: process commands in the order they were sent,
+        # so "/pause" then "/resume" can't end up applied in reverse.
+        await self.dp.start_polling(
+            self.bot, handle_signals=False, handle_as_tasks=False
+        )
 
     async def cmd_pause(self, message: Message):
         """Handle /pause command."""

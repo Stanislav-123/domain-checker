@@ -28,7 +28,6 @@ async def test_first_failure_no_alert(storage):
     """Test that first failure doesn't trigger alert."""
     domain = "example.com"
 
-
     state = await storage.get_domain_state(domain)
     assert state is None
 

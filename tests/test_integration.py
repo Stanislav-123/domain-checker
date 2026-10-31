@@ -253,3 +253,33 @@ def test_interval_is_honored(tmp_path, minutes):
         await sched.notifier.close()
 
     asyncio.run(run())
+
+
+@pytest.mark.asyncio
+async def test_migrates_v1_0_database(tmp_path):
+    """A DB created by v1.0.x (no is_active/last_seen) must keep working."""
+    import sqlite3
+
+    from domain_checker.storage import Storage
+
+    db = tmp_path / "old.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE domain_state (domain TEXT PRIMARY KEY, last_status TEXT NOT NULL,"
+        " consecutive_failures INTEGER DEFAULT 0, last_alert_sent TEXT,"
+        " last_recovery_sent TEXT, updated_at TEXT NOT NULL)"
+    )
+    con.execute(
+        "INSERT INTO domain_state VALUES ('a.test','down',3,NULL,NULL,'2026-01-01')"
+    )
+    con.commit()
+    con.close()
+
+    storage = Storage(str(db))
+    await storage.initialize()
+    await storage.initialize()  # idempotent
+    await storage.mark_domains_active(["a.test"])
+    await storage.mark_domains_inactive(["a.test"])
+    state = await storage.get_domain_state("a.test")
+    assert state["consecutive_failures"] == 3
+    assert state["is_active"] == 1

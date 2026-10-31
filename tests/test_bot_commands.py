@@ -129,9 +129,7 @@ async def test_list_command(storage, mock_message, checker, notifier):
 
 
 @pytest.mark.asyncio
-async def test_pause_command(
-    storage, mock_message, checker, notifier, mock_scheduler
-):
+async def test_pause_command(storage, mock_message, checker, notifier, mock_scheduler):
     """Test /pause command."""
     with patch("domain_checker.bot.make_bot"):
         bot = DomainBot(
@@ -150,9 +148,7 @@ async def test_pause_command(
 
 
 @pytest.mark.asyncio
-async def test_resume_command(
-    storage, mock_message, checker, notifier, mock_scheduler
-):
+async def test_resume_command(storage, mock_message, checker, notifier, mock_scheduler):
     """Test /resume command."""
     with patch("domain_checker.bot.make_bot"):
         bot = DomainBot(

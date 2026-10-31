@@ -50,6 +50,21 @@ class Storage:
                 )
             """)
 
+            # Migrate databases created by v1.0.x (no is_active / last_seen).
+            async with db.execute("PRAGMA table_info(domain_state)") as cur:
+                columns = {row[1] for row in await cur.fetchall()}
+            if "is_active" not in columns:
+                await db.execute(
+                    "ALTER TABLE domain_state ADD COLUMN is_active BOOLEAN DEFAULT 1"
+                )
+            if "last_seen" not in columns:
+                await db.execute(
+                    "ALTER TABLE domain_state ADD COLUMN last_seen TEXT NOT NULL DEFAULT ''"
+                )
+                await db.execute(
+                    "UPDATE domain_state SET last_seen = updated_at WHERE last_seen = ''"
+                )
+
             await db.execute("""
                 CREATE INDEX IF NOT EXISTS idx_domain_checks_domain
                 ON domain_checks(domain)
