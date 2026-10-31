@@ -321,29 +321,31 @@ from typing import List
 from .base import DomainSource
 import httpx
 
+
 class YourTrackerSource(DomainSource):
     def __init__(self, base_url: str, api_key: str, timeout: int = 10):
         self.base_url = base_url
         self.api_key = api_key
         self.timeout = timeout
-    
+
     async def fetch_domains(self) -> List[str]:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.get(
                 f"{self.base_url}/your-endpoint",
-                headers={"Authorization": f"Bearer {self.api_key}"}
+                headers={"Authorization": f"Bearer {self.api_key}"},
             )
             response.raise_for_status()
             data = response.json()
             # Парсинг ответа
-            return [domain for domain in data['domains']]
+            return [domain for domain in data["domains"]]
 ```
 
 2. Добавить в `domain_checker/sources/__init__.py`:
 
 ```python
 from .yourtracker import YourTrackerSource
-__all__ = [..., 'YourTrackerSource']
+
+__all__ = [..., "YourTrackerSource"]
 ```
 
 3. Добавить в `scheduler.py` метод `_create_source`:
