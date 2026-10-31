@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  domain-checker:
+    build: .
+    container_name: domain-checker
+    restart: unless-stopped
+    environment:
+      - TRACKER_TYPE=${TRACKER_TYPE}
+      - TRACKER_URL=${TRACKER_URL}
+      - TRACKER_API_KEY=${TRACKER_API_KEY}
+      - CUSTOM_HEADER_NAME=${CUSTOM_HEADER_NAME:-Authorization}
+      - CUSTOM_DOMAINS_PATH=${CUSTOM_DOMAINS_PATH:-domains}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - CHECK_INTERVAL_MINUTES=${CHECK_INTERVAL_MINUTES:-15}
+      - CONSECUTIVE_FAILURES_THRESHOLD=${CONSECUTIVE_FAILURES_THRESHOLD:-2}
+      - SSL_WARNING_DAYS=${SSL_WARNING_DAYS:-7}
+      - MAX_CONCURRENT_CHECKS=${MAX_CONCURRENT_CHECKS:-10}
+      - REQUEST_TIMEOUT_SECONDS=${REQUEST_TIMEOUT_SECONDS:-10}
+      - DATABASE_PATH=${DATABASE_PATH:-data/domain_checker.db}
+    volumes:
+      - ./data:/app/data
+    networks:
+      - domain-checker-network
+
+networks:
+  domain-checker-network:
+    driver: bridge

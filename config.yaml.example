@@ -1,0 +1,23 @@
+tracker:
+  type: keitaro  # keitaro, binom, or custom
+  url: https://your-tracker.com
+  api_key: your-api-key-here
+  
+  # For custom tracker only
+  custom:
+    header_name: Authorization  # Header name for API key
+    domains_path: domains  # JSON path to domains list
+
+telegram:
+  bot_token: your-bot-token
+  chat_id: your-chat-id
+
+checker:
+  interval_minutes: 15
+  consecutive_failures_threshold: 2
+  ssl_warning_days: 7
+  max_concurrent_checks: 10
+  request_timeout_seconds: 10
+
+database:
+  path: data/domain_checker.db
